@@ -1,30 +1,46 @@
 from lark import Lark, Token, Transformer, ast_utils, v_args
 
 from liquid_types import ast
+from liquid_types.errors import ParseError
 
-grammar = """
-    ?exp: "let" VAR "=" exp ";" exp -> let
+grammar = r"""
+    ?exp: "val" VAR ":" typ ";"? "let" VAR "=" exp ";" exp -> signed_let
+        | "let" VAR "=" exp ";" exp -> let
         | bop
 
-    ?bop: bop OP postfix -> binary_op
-        | postfix
+    ?bop: bop ADD_OP product -> binary_op
+        | product
+
+    ?product: product MUL_OP postfix -> binary_op
+            | postfix
 
     ?postfix: postfix "(" VAR ")" -> app
             | postfix ":" typ -> annot
             | atom
 
     ?atom: NUMBER -> const
+         | "-" NUMBER -> negative_const
          | VAR -> var
-         | "(" VAR ")" "=>" "{" exp "}" -> fun
+         | "(" PARAM ")" "=>" "{" exp "}" -> fun
+         | "(" exp ")"
 
-    ?typ: BASE
+    ?typ: VAR ":" type_atom "=>" typ -> named_fun_type
+        | type_atom "=>" typ -> fun_type
+        | type_atom
+
+    ?type_atom: BASE -> int_type
+              | "(" typ ")"
 
     BASE: "int"
 
-    OP: "+" | "-" | "*" | "/"
-    VAR: LETTER+
+    ADD_OP: "+" | "-"
+    MUL_OP: "*" | "/"
 
-    %import common.LETTER
+    // Match a name followed by optional whitespace, ')' and '=>', without consuming them.
+    // Priority 2 makes PARAM win over VAR.
+    PARAM.2: VAR /(?=\s*\)\s*=>)/
+
+    %import common.CNAME -> VAR
     %import common.INT -> NUMBER
     %import common.WS
     %ignore WS
@@ -40,11 +56,44 @@ class ToAst(Transformer):
     def VAR(self, token: Token) -> str:
         return str(token)
 
-    def OP(self, token: Token) -> str:
+    def PARAM(self, token: Token) -> str:
         return str(token)
+
+    def ADD_OP(self, token: Token) -> str:
+        return str(token)
+
+    def MUL_OP(self, token: Token) -> str:
+        return str(token)
+
+    @v_args(inline=True)
+    def negative_const(self, value: int) -> ast.Const:
+        return ast.Const(-value)
 
     def BASE(self, token: Token) -> str:
         return str(token)
+
+    @v_args(inline=True)
+    def int_type(self, _base: str) -> ast.TInt:
+        return ast.TInt()
+
+    @v_args(inline=True)
+    def fun_type(self, arg: ast.Type, ret: ast.Type) -> ast.TFun:
+        return ast.TFun(arg, ret)
+
+    @v_args(inline=True)
+    def named_fun_type(self, _name: str, arg: ast.Type, ret: ast.Type) -> ast.TFun:
+        # Parameter names carry no meaning in non-dependent STLC types.
+        return ast.TFun(arg, ret)
+
+    @v_args(inline=True)
+    def signed_let(
+        self, name: str, typ: ast.Type, bound_name: str, value: ast.Exp, body: ast.Exp
+    ) -> ast.Let:
+        if name != bound_name:
+            raise ParseError(
+                f"Signature for '{name}' must immediately precede 'let {name}', but found 'let {bound_name}'"
+            )
+        return ast.Let(name, ast.Annot(value, typ), body)
 
     @v_args(inline=True)
     def binary_op(self, left: ast.Exp, op: str, right: ast.Exp) -> ast.Bop:
@@ -59,27 +108,3 @@ transformer = ast_utils.create_transformer(ast, ToAst())
 
 def parse(pgm: str) -> ast.Exp:
     return transformer.transform(parser.parse(pgm))
-
-
-def main() -> None:
-    from liquid_types.interp import interp
-
-    exp = parse("""
-    let inc = (x) => {
-      let one = 1;
-      x + one
-    };
-    let incf = (x) => {
-      let tmp = (f) => {
-        f(x) + 1
-      };
-      tmp(inc)
-    };
-    let arg = 1;
-    incf(arg)
-    """)
-    print(interp(exp))  # 3
-
-
-if __name__ == "__main__":
-    main()

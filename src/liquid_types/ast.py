@@ -48,7 +48,21 @@ class App(_Ast):
 @dataclass(frozen=True)
 class Annot(_Ast):
     e: Exp
-    t: str
+    t: Type
 
 
 type Exp = Const | Bop | Var | Let | Fun | App | Annot
+
+
+@dataclass(frozen=True)
+class TInt:
+    pass
+
+
+@dataclass(frozen=True)
+class TFun:
+    arg: Type
+    ret: Type
+
+
+type Type = TInt | TFun

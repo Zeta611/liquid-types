@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import assert_never
 
 from liquid_types.ast import Annot, App, Bop, Const, Exp, Fun, Let, Var
+from liquid_types.errors import RuntimeError
 
 
 @dataclass(frozen=True)
@@ -32,26 +33,28 @@ def interp(exp: Exp, env: Env | None = None) -> Value:
             match op:
                 case "+":
                     if not (isinstance(v1, int) and isinstance(v2, int)):
-                        raise TypeError("Cannot add a function")
+                        raise RuntimeError("Cannot add a function")
                     return v1 + v2
                 case "-":
                     if not (isinstance(v1, int) and isinstance(v2, int)):
-                        raise TypeError("Cannot subtract a function")
+                        raise RuntimeError("Cannot subtract a function")
                     return v1 - v2
                 case "*":
                     if not (isinstance(v1, int) and isinstance(v2, int)):
-                        raise TypeError("Cannot multiply a function")
+                        raise RuntimeError("Cannot multiply a function")
                     return v1 * v2
                 case "/":
                     if not (isinstance(v1, int) and isinstance(v2, int)):
-                        raise TypeError("Cannot divide a function")
+                        raise RuntimeError("Cannot divide a function")
+                    if v2 == 0:
+                        raise RuntimeError("Cannot divide by zero")
                     return v1 // v2
                 case _:
-                    raise NotImplementedError(f"Undefined operator {op}")
+                    raise RuntimeError(f"Undefined operator {op}")
 
         case Var(x):
             if x not in env:
-                raise NameError(f"Unbound variable {x}")
+                raise RuntimeError(f"Unbound variable {x}")
             return env[x]
 
         case Let(x, e1, e2):
@@ -64,10 +67,10 @@ def interp(exp: Exp, env: Env | None = None) -> Value:
         case App(e, x):
             fun = interp(e, env)
             if not isinstance(fun, Closure):
-                raise TypeError("Cannot apply a non-function")
+                raise RuntimeError("Cannot apply a non-function")
 
             if x not in env:
-                raise NameError(f"Unbound variable {x}")
+                raise RuntimeError(f"Unbound variable {x}")
             return interp(fun.body, {**fun.env, fun.x: env[x]})
 
         case Annot(e, _):
@@ -75,16 +78,3 @@ def interp(exp: Exp, env: Env | None = None) -> Value:
 
         case _:
             assert_never(exp)
-
-
-def main() -> None:
-    exp = Let(
-        "identity",
-        Fun("x", Var("x")),
-        Let("answer", Bop("+", Const(40), Const(2)), App(Var("identity"), "answer")),
-    )
-    print(interp(exp))  # 42
-
-
-if __name__ == "__main__":
-    main()
