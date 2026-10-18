@@ -9,6 +9,13 @@ class Const:
 
 
 @dataclass(frozen=True)
+class Bop:
+    op: str
+    e1: Exp
+    e2: Exp
+
+
+@dataclass(frozen=True)
 class Var:
     x: str
 
@@ -38,4 +45,4 @@ class Annot:
     ty: str
 
 
-type Exp = Const | Var | Let | Fun | App | Annot
+type Exp = Const | Bop | Var | Let | Fun | App | Annot
