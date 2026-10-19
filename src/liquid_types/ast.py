@@ -116,6 +116,7 @@ class TRefine:
 
 @dataclass(frozen=True)
 class TFun:
+    binder: str
     arg: Type
     ret: Type
 

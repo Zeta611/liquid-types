@@ -1,18 +1,28 @@
 from __future__ import annotations
 
+from typing import assert_never
+
 from liquid_types.ast import (
     Annot,
     App,
     Bop,
     Const,
+    Conj,
+    Disj,
     Exp,
     Fun,
     Let,
+    InterpOp,
+    Neg,
     PBool,
+    PInt,
+    Pred,
+    PVar,
     TFun,
     TInt,
     TRefine,
     Type,
+    UninterpFun,
     Var,
 )
 from liquid_types.errors import TypeCheckError
@@ -24,6 +34,54 @@ def prim(v) -> Type:
     if isinstance(v, int):
         return TRefine(TInt(), "v", PBool(True))
     raise NotImplementedError()
+
+
+def subst_p(p: Pred, old: str, new: str) -> Pred:
+    # p[old := new]
+    match p:
+        case PVar(name):
+            return PVar(new) if name == old else p
+        case PBool() | PInt():
+            return p
+        case InterpOp(op, p1, p2):
+            return InterpOp(op, subst_p(p1, old, new), subst_p(p2, old, new))
+        case Conj(p1, p2):
+            return Conj(subst_p(p1, old, new), subst_p(p2, old, new))
+        case Disj(p1, p2):
+            return Disj(subst_p(p1, old, new), subst_p(p2, old, new))
+        case Neg(inner):
+            return Neg(subst_p(inner, old, new))
+        case UninterpFun(f, ps):
+            return UninterpFun(f, [subst_p(arg, old, new) for arg in ps])
+        case _:
+            assert_never(p)
+
+
+def subst_t(t: Type, old: str, new: str) -> Type:
+    # t[old := new]
+    match t:
+        case TRefine(b, v, _p) if v == old:
+            # v is not free in _p
+            # b{old: _p}[old := new] = b{old: _p}
+            return t
+
+        case TRefine(b, v, p):
+            # v is free in p
+            # b{v: p}[old := new] = b{v: p[old := new]}
+            return TRefine(b, v, subst_p(p, old, new))
+
+        case TFun(x, s, t) if x == old:
+            # x is not free in p
+            # (old: s->t)[old := new] = old: s[old := new]->t
+            return TFun(x, subst_t(s, old, new), t)
+
+        case TFun(x, s, t):
+            # x is free in p
+            # (x: s->t)[old := new] = x: s[old := new]->t[old := new]
+            return TFun(x, subst_t(s, old, new), subst_t(t, old, new))
+
+        case _:
+            assert_never(t)
 
 
 def synth(exp: Exp, tyenv: TyEnv | None = None) -> Type:
@@ -78,6 +136,10 @@ def synth(exp: Exp, tyenv: TyEnv | None = None) -> Type:
 
         case Let():
             raise TypeCheckError("Cannot infer the type of this let expression")
+
+
+def is_base(t: Type) -> bool:
+    return isinstance(t, TRefine)
 
 
 def check(exp: Exp, t: Type, tyenv: TyEnv | None = None) -> None:
