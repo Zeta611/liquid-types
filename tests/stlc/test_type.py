@@ -1,9 +1,9 @@
 import unittest
 
-from liquid_types.ast import TFun, TInt
-from liquid_types.interp import interp
-from liquid_types.parse import parse
-from liquid_types.type import check, synth
+from stlc.ast import TFun, TInt
+from stlc.interp import interp
+from stlc.parse import parse
+from stlc.type import check, synth
 
 
 class TypeCheckerTests(unittest.TestCase):

@@ -28,13 +28,43 @@ grammar = r"""
         | type_atom "=>" typ -> fun_type
         | type_atom
 
-    ?type_atom: BASE -> int_type
+    ?type_atom: BASE "[" VAR "|" pred "]" -> refined_int
+              | BASE -> int_type
               | "(" typ ")"
+
+    ?pred: pred_or
+
+    ?pred_or: pred_or "||" pred_and -> disj
+            | pred_and
+
+    ?pred_and: pred_and "&&" pred_not -> conj
+             | pred_not
+
+    ?pred_not: "!" pred_not -> neg
+             | pred_cmp
+
+    ?pred_cmp: pred_sum CMP_OP pred_sum -> pred_binary
+             | pred_sum
+
+    ?pred_sum: pred_sum ADD_OP pred_product -> pred_binary
+             | pred_product
+
+    ?pred_product: pred_product MUL_OP pred_atom -> pred_binary
+                 | pred_atom
+
+    ?pred_atom: NUMBER -> p_int
+              | "-" NUMBER -> negative_pred_int
+              | "true" -> pred_true
+              | "false" -> pred_false
+              | VAR "(" [pred ("," pred)*] ")" -> pred_call
+              | VAR -> p_var
+              | "(" pred ")"
 
     BASE: "int"
 
     ADD_OP: "+" | "-"
     MUL_OP: "*" | "/"
+    CMP_OP: "=" | "==" | "!=" | "<" | "<=" | ">" | ">="
 
     // Match a name followed by optional whitespace, ')' and '=>', without consuming them.
     // Priority 2 makes PARAM win over VAR.
@@ -46,7 +76,9 @@ grammar = r"""
     %ignore WS
 """
 
-parser = Lark(grammar, start="exp", parser="lalr", strict=True)
+parser = Lark(
+    grammar, start=["exp", "pred"], parser="lalr", strict=True, maybe_placeholders=False
+)
 
 
 class ToAst(Transformer):
@@ -65,6 +97,9 @@ class ToAst(Transformer):
     def MUL_OP(self, token: Token) -> str:
         return str(token)
 
+    def CMP_OP(self, token: Token) -> str:
+        return str(token)
+
     @v_args(inline=True)
     def negative_const(self, value: int) -> ast.Const:
         return ast.Const(-value)
@@ -73,8 +108,32 @@ class ToAst(Transformer):
         return str(token)
 
     @v_args(inline=True)
-    def int_type(self, _base: str) -> ast.TInt:
-        return ast.TInt()
+    def int_type(self, _base: str) -> ast.TRefine:
+        return ast.TRefine(ast.TInt(), "v", ast.PBool(True))
+
+    @v_args(inline=True)
+    def refined_int(self, _base: str, binder: str, predicate: ast.Pred) -> ast.TRefine:
+        return ast.TRefine(ast.TInt(), binder, predicate)
+
+    @v_args(inline=True)
+    def negative_pred_int(self, value: int) -> ast.PInt:
+        return ast.PInt(-value)
+
+    @v_args(inline=True)
+    def pred_true(self) -> ast.PBool:
+        return ast.PBool(True)
+
+    @v_args(inline=True)
+    def pred_false(self) -> ast.PBool:
+        return ast.PBool(False)
+
+    @v_args(inline=True)
+    def pred_binary(self, left: ast.Pred, op: str, right: ast.Pred) -> ast.InterpOp:
+        return ast.InterpOp(op, left, right)
+
+    @v_args(inline=True)
+    def pred_call(self, name: str, *args: ast.Pred) -> ast.UninterpFun:
+        return ast.UninterpFun(name, list(args))
 
     @v_args(inline=True)
     def fun_type(self, arg: ast.Type, ret: ast.Type) -> ast.TFun:
@@ -107,4 +166,8 @@ transformer = ast_utils.create_transformer(ast, ToAst())
 
 
 def parse(pgm: str) -> ast.Exp:
-    return transformer.transform(parser.parse(pgm))
+    return transformer.transform(parser.parse(pgm, start="exp"))
+
+
+def parse_pred(source: str) -> ast.Pred:
+    return transformer.transform(parser.parse(source, start="pred"))

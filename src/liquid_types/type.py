@@ -8,8 +8,10 @@ from liquid_types.ast import (
     Exp,
     Fun,
     Let,
+    PBool,
     TFun,
     TInt,
+    TRefine,
     Type,
     Var,
 )
@@ -20,7 +22,7 @@ type TyEnv = dict[str, Type]
 
 def prim(v) -> Type:
     if isinstance(v, int):
-        return TInt()
+        return TRefine(TInt(), "v", PBool(True))
     raise NotImplementedError()
 
 
@@ -37,21 +39,21 @@ def synth(exp: Exp, tyenv: TyEnv | None = None) -> Type:
             t2 = synth(e2, tyenv)
             match op:
                 case "+":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
+                    if not (isinstance(t1, TRefine) and isinstance(t2, TRefine)):
                         raise TypeCheckError("Cannot add a function")
-                    return TInt()
+                    return TRefine(TInt(), "v", PBool(True))
                 case "-":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
+                    if not (isinstance(t1, TRefine) and isinstance(t2, TRefine)):
                         raise TypeCheckError("Cannot subtract a function")
-                    return TInt()
+                    return TRefine(TInt(), "v", PBool(True))
                 case "*":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
+                    if not (isinstance(t1, TRefine) and isinstance(t2, TRefine)):
                         raise TypeCheckError("Cannot multiply a function")
-                    return TInt()
+                    return TRefine(TInt(), "v", PBool(True))
                 case "/":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
+                    if not (isinstance(t1, TRefine) and isinstance(t2, TRefine)):
                         raise TypeCheckError("Cannot divide a function")
-                    return TInt()
+                    return TRefine(TInt(), "v", PBool(True))
                 case _:
                     raise NotImplementedError(f"Undefined operator {op}")
 

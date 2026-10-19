@@ -1,12 +1,13 @@
 import unittest
 
-from liquid_types.ast import Annot, Fun, Let, TFun, TInt, Var
+from liquid_types.ast import Annot, Fun, Let, PBool, TFun, TInt, TRefine, Var
 from liquid_types.interp import interp
 from liquid_types.parse import parse
 
 
 class ParserTests(unittest.TestCase):
     def test_signature_annotates_the_following_definition(self):
+        int_type = TRefine(TInt(), "v", PBool(True))
         for separator in ("", ";"):
             with self.subTest(separator=separator):
                 exp = parse(f"""
@@ -18,7 +19,7 @@ class ParserTests(unittest.TestCase):
                     exp,
                     Let(
                         "identity2",
-                        Annot(Fun("x1", Var("x1")), TFun(TInt(), TInt())),
+                        Annot(Fun("x1", Var("x1")), TFun(int_type, int_type)),
                         Var("identity2"),
                     ),
                 )
