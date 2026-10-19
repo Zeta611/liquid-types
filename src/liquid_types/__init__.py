@@ -1,2 +1,4 @@
-def main() -> None:
-    print("Hello from liquid_types!")
+def main() -> int:
+    from liquid_types.cli import main as cli_main
+
+    return cli_main()

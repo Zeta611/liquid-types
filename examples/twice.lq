@@ -1,0 +1,20 @@
+(
+    val inc : x:int => int[v | v = x + 1];
+    let inc = (x) => {
+        let one = 1;
+        x + one
+    };
+
+    val twice : f:(a:int => int[v | v > a])
+                => x:int => int[v | v > x];
+    let twice = (f) => {
+        (x) => {
+            let y = f(x);
+            f(y)
+        }
+    };
+
+    let twice_inc = twice(inc);
+    let n = 40;
+    twice_inc(n)
+) : int[v | v >= 41]

@@ -1,0 +1,12 @@
+(
+    val divide : x:int => y:int[v | v != 0] => int[v | v = x / y];
+    let divide = (x) => {
+        (y) => {
+            x / y
+        }
+    };
+
+    let six = 6;
+    let two = 2;
+    divide(six)(two)
+) : int[v | v = 3]

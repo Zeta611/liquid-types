@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import assert_never
 
+import z3
+
 from liquid_types.ast import (
     Annot,
     App,
@@ -30,6 +32,9 @@ from liquid_types.logic import (
     Pred,
     PVar,
     UninterpFun,
+    boolean,
+    to_z3,
+    valid,
 )
 
 type TyEnv = dict[str, Type]
@@ -205,60 +210,16 @@ def synth(exp: Exp, tyenv: TyEnv | None = None) -> tuple[Constraint, Type]:
             raise TypeCheckError("Cannot infer the type of this let expression")
 
 
-def pred_sort(p: Pred, tyenv: TyEnv) -> type[int | bool]:
-    match p:
-        case PBool():
-            return bool
-
-        case PInt():
-            return int
-
-        case PVar(name):
-            if name not in tyenv:
-                raise TypeCheckError(f"Unbound refinement variable {name}")
-            if not isinstance(tyenv[name], TRefine):
-                raise TypeCheckError(f"Function {name} cannot be a refinement value")
-            return int
-
-        case InterpOp(op, p1, p2):
-            s1, s2 = pred_sort(p1, tyenv), pred_sort(p2, tyenv)
-            if op in ("+", "-", "*", "/") and s1 is int and s2 is int:
-                return int
-            if op in ("<", "<=", ">", ">=") and s1 is int and s2 is int:
-                return bool
-            if op in ("=", "==", "!=") and s1 is s2:
-                return bool
-            raise TypeCheckError(
-                f"Invalid refinement operands for {op}: {s1.__name__}, {s2.__name__}"
-            )
-
-        case Conj(p1, p2) | Disj(p1, p2):
-            s1, s2 = pred_sort(p1, tyenv), pred_sort(p2, tyenv)
-            if s1 is not bool or s2 is not bool:
-                raise TypeCheckError("Logical connectives require Boolean operands")
-            return bool
-
-        case Neg(p):
-            if pred_sort(p, tyenv) is not bool:
-                raise TypeCheckError("Logical negation requires a Boolean operand")
-            return bool
-
-        case UninterpFun(f, _):
-            raise TypeCheckError(f"No logical signature declared for {f}")
-
-        case _:
-            assert_never(p)
-
-
 def well_formed(t: Type, tyenv: TyEnv | None = None) -> None:
     if tyenv is None:
         tyenv = {}
 
     match t:
-        case TRefine(b, v, p):
-            binder_type = TRefine(b, v, PBool(True))
-            if pred_sort(p, {**tyenv, v: binder_type}) is not bool:
-                raise TypeCheckError("A refinement predicate must be Boolean")
+        case TRefine(_, v, p):
+            env = {
+                x: z3.FreshInt(x) for x, s in tyenv.items() if isinstance(s, TRefine)
+            }
+            boolean(to_z3(p, {**env, v: z3.FreshInt(v)}))
         case TFun(x, s, t):
             well_formed(s, tyenv)
             well_formed(t, {**tyenv, x: s})
@@ -287,3 +248,24 @@ def check(exp: Exp, t: Type, tyenv: TyEnv | None = None) -> Constraint:
         case e:
             c, s = synth(e, tyenv)
             return ConsConj(c, sub(s, t))
+
+
+def typecheck(exp: Exp, t: Type | None = None, tyenv: TyEnv | None = None) -> Type:
+    if tyenv is None:
+        tyenv = {}
+
+    scope: TyEnv = {}
+    for x, s in tyenv.items():
+        well_formed(s, scope)
+        scope[x] = s
+
+    if t is None:
+        c, t = synth(exp, tyenv)
+    else:
+        c = check(exp, t, tyenv)
+
+    for x, s in reversed(list(tyenv.items())):
+        c = impl_constraint(x, s, c)
+    if not valid(c):
+        raise TypeCheckError("Refinement constraint is not valid")
+    return t

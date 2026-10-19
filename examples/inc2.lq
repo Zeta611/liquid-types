@@ -1,0 +1,16 @@
+(
+    val inc : x:int => int[v | v = x + 1];
+    let inc = (x) => {
+        let one = 1;
+        x + one
+    };
+
+    val inc2 : x:int => int[v | v = x + 2];
+    let inc2 = (x) => {
+        let y = inc(x);
+        inc(y)
+    };
+
+    let n = 40;
+    inc2(n)
+) : int[v | v = 42]
