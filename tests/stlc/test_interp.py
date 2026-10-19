@@ -9,7 +9,9 @@ class InterpreterTests(unittest.TestCase):
         exp = Let(
             "identity",
             Fun("x", Var("x")),
-            Let("answer", Bop("+", Const(40), Const(2)), App(Var("identity"), "answer")),
+            Let("forty", Const(40), Let("two", Const(2),
+                Let("answer", Bop("+", "forty", "two"), App(Var("identity"), "answer")),
+            )),
         )
         self.assertEqual(interp(exp), 42)
 

@@ -2,21 +2,8 @@ import unittest
 
 from lark.exceptions import UnexpectedInput
 
-from liquid_types.ast import (
-    Annot,
-    Conj,
-    Const,
-    Disj,
-    InterpOp,
-    Neg,
-    PBool,
-    PInt,
-    PVar,
-    TFun,
-    TInt,
-    TRefine,
-    UninterpFun,
-)
+from liquid_types.ast import Annot, Const, TFun, TInt, TRefine
+from liquid_types.logic import Conj, Disj, InterpOp, Neg, PBool, PInt, PVar, UninterpFun
 from liquid_types.parse import parse, parse_pred
 
 
@@ -121,12 +108,13 @@ class PredicateParserTests(unittest.TestCase):
     def test_refinements_in_function_signature(self):
         exp = parse("""
         val inc : int[v | v >= 0] => int[result | result > 0]
-        let inc = (x) => { x + 1 };
+        let inc = (x) => { let one = 1; x + one };
         inc
         """)
         self.assertEqual(
             exp.e1.t,
             TFun(
+                "%arg0",
                 TRefine(TInt(), "v", InterpOp(">=", PVar("v"), PInt(0))),
                 TRefine(TInt(), "result", InterpOp(">", PVar("result"), PInt(0))),
             ),

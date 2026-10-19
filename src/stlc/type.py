@@ -18,10 +18,20 @@ from stlc.errors import TypeCheckError
 type TyEnv = dict[str, Type]
 
 
-def prim(v) -> Type:
+def prim(v: int | str) -> Type:
     if isinstance(v, int):
         return TInt()
-    raise NotImplementedError()
+    op = {"add": "+", "sub": "-", "mul": "*", "div": "/"}.get(v, v)
+    if op in ("+", "-", "*", "/"):
+        return TFun(TInt(), TFun(TInt(), TInt()))
+    raise NotImplementedError(f"Undefined primitive {v}")
+
+
+def apply_type(t: Type, x: str, tyenv: TyEnv) -> Type:
+    if not isinstance(t, TFun):
+        raise TypeCheckError(f"{t} is not a function type")
+    check(Var(x), t.arg, tyenv)
+    return t.ret
 
 
 def synth(exp: Exp, tyenv: TyEnv | None = None) -> Type:
@@ -32,28 +42,8 @@ def synth(exp: Exp, tyenv: TyEnv | None = None) -> Type:
         case Const(n):
             return prim(n)
 
-        case Bop(op, e1, e2):
-            t1 = synth(e1, tyenv)
-            t2 = synth(e2, tyenv)
-            match op:
-                case "+":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
-                        raise TypeCheckError("Cannot add a function")
-                    return TInt()
-                case "-":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
-                        raise TypeCheckError("Cannot subtract a function")
-                    return TInt()
-                case "*":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
-                        raise TypeCheckError("Cannot multiply a function")
-                    return TInt()
-                case "/":
-                    if not (isinstance(t1, TInt) and isinstance(t2, TInt)):
-                        raise TypeCheckError("Cannot divide a function")
-                    return TInt()
-                case _:
-                    raise NotImplementedError(f"Undefined operator {op}")
+        case Bop(op, x, y):
+            return apply_type(apply_type(prim(op), x, tyenv), y, tyenv)
 
         case Var(x):
             if x not in tyenv:
@@ -61,11 +51,7 @@ def synth(exp: Exp, tyenv: TyEnv | None = None) -> Type:
             return tyenv[x]
 
         case App(e, x):
-            t_fun = synth(e, tyenv)
-            if not isinstance(t_fun, TFun):
-                raise TypeCheckError(f"{t_fun} is not a function type")
-            check(Var(x), t_fun.arg, tyenv)
-            return t_fun.ret
+            return apply_type(synth(e, tyenv), x, tyenv)
 
         case Annot(e, t):
             check(e, t, tyenv)

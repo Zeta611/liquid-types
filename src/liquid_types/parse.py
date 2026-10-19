@@ -1,6 +1,8 @@
+from itertools import count
+
 from lark import Lark, Token, Transformer, ast_utils, v_args
 
-from liquid_types import ast
+from liquid_types import ast, logic
 from liquid_types.errors import ParseError
 
 grammar = r"""
@@ -8,11 +10,9 @@ grammar = r"""
         | "let" VAR "=" exp ";" exp -> let
         | bop
 
-    ?bop: bop ADD_OP product -> binary_op
-        | product
-
-    ?product: product MUL_OP postfix -> binary_op
-            | postfix
+    ?bop: VAR ADD_OP VAR -> binary_op
+        | VAR MUL_OP VAR -> binary_op
+        | postfix
 
     ?postfix: postfix "(" VAR ")" -> app
             | postfix ":" typ -> annot
@@ -82,6 +82,10 @@ parser = Lark(
 
 
 class ToAst(Transformer):
+    def __init__(self):
+        super().__init__()
+        self.binders = count()
+
     def NUMBER(self, token: Token) -> int:
         return int(token)
 
@@ -109,40 +113,40 @@ class ToAst(Transformer):
 
     @v_args(inline=True)
     def int_type(self, _base: str) -> ast.TRefine:
-        return ast.TRefine(ast.TInt(), "v", ast.PBool(True))
+        return ast.TRefine(ast.TInt(), "v", logic.PBool(True))
 
     @v_args(inline=True)
-    def refined_int(self, _base: str, binder: str, predicate: ast.Pred) -> ast.TRefine:
+    def refined_int(self, _base: str, binder: str, predicate: logic.Pred) -> ast.TRefine:
         return ast.TRefine(ast.TInt(), binder, predicate)
 
     @v_args(inline=True)
-    def negative_pred_int(self, value: int) -> ast.PInt:
-        return ast.PInt(-value)
+    def negative_pred_int(self, value: int) -> logic.PInt:
+        return logic.PInt(-value)
 
     @v_args(inline=True)
-    def pred_true(self) -> ast.PBool:
-        return ast.PBool(True)
+    def pred_true(self) -> logic.PBool:
+        return logic.PBool(True)
 
     @v_args(inline=True)
-    def pred_false(self) -> ast.PBool:
-        return ast.PBool(False)
+    def pred_false(self) -> logic.PBool:
+        return logic.PBool(False)
 
     @v_args(inline=True)
-    def pred_binary(self, left: ast.Pred, op: str, right: ast.Pred) -> ast.InterpOp:
-        return ast.InterpOp(op, left, right)
+    def pred_binary(self, left: logic.Pred, op: str, right: logic.Pred) -> logic.InterpOp:
+        return logic.InterpOp(op, left, right)
 
     @v_args(inline=True)
-    def pred_call(self, name: str, *args: ast.Pred) -> ast.UninterpFun:
-        return ast.UninterpFun(name, list(args))
+    def pred_call(self, name: str, *args: logic.Pred) -> logic.UninterpFun:
+        return logic.UninterpFun(name, list(args))
 
     @v_args(inline=True)
     def fun_type(self, arg: ast.Type, ret: ast.Type) -> ast.TFun:
-        return ast.TFun(arg, ret)
+        # '%' cannot occur in source identifiers.
+        return ast.TFun(f"%arg{next(self.binders)}", arg, ret)
 
     @v_args(inline=True)
-    def named_fun_type(self, _name: str, arg: ast.Type, ret: ast.Type) -> ast.TFun:
-        # Parameter names carry no meaning in non-dependent STLC types.
-        return ast.TFun(arg, ret)
+    def named_fun_type(self, name: str, arg: ast.Type, ret: ast.Type) -> ast.TFun:
+        return ast.TFun(name, arg, ret)
 
     @v_args(inline=True)
     def signed_let(
@@ -155,19 +159,20 @@ class ToAst(Transformer):
         return ast.Let(name, ast.Annot(value, typ), body)
 
     @v_args(inline=True)
-    def binary_op(self, left: ast.Exp, op: str, right: ast.Exp) -> ast.Bop:
+    def binary_op(self, left: str, op: str, right: str) -> ast.Bop:
         return ast.Bop(op, left, right)
 
 
 # https://lark-parser.readthedocs.io/en/stable/classes.html#lark.ast_utils.create_transformer
 # > For each class, we create a corresponding rule in the transformer, with a matching name.
 # > CamelCase names will be converted into snake_case. Example: “CodeBlock” -> “code_block”.
-transformer = ast_utils.create_transformer(ast, ToAst())
-
-
 def parse(pgm: str) -> ast.Exp:
+    transformer = ast_utils.create_transformer(logic, ToAst())
+    transformer = ast_utils.create_transformer(ast, transformer)
     return transformer.transform(parser.parse(pgm, start="exp"))
 
 
-def parse_pred(source: str) -> ast.Pred:
+def parse_pred(source: str) -> logic.Pred:
+    transformer = ast_utils.create_transformer(logic, ToAst())
+    transformer = ast_utils.create_transformer(ast, transformer)
     return transformer.transform(parser.parse(source, start="pred"))

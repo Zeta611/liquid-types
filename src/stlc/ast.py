@@ -17,8 +17,8 @@ class Const(_Ast):
 @dataclass(frozen=True)
 class Bop(_Ast):
     op: str
-    e1: Exp
-    e2: Exp
+    x: str
+    y: str
 
 
 @dataclass(frozen=True)

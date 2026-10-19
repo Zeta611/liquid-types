@@ -8,11 +8,9 @@ grammar = r"""
         | "let" VAR "=" exp ";" exp -> let
         | bop
 
-    ?bop: bop ADD_OP product -> binary_op
-        | product
-
-    ?product: product MUL_OP postfix -> binary_op
-            | postfix
+    ?bop: VAR ADD_OP VAR -> binary_op
+        | VAR MUL_OP VAR -> binary_op
+        | postfix
 
     ?postfix: postfix "(" VAR ")" -> app
             | postfix ":" typ -> annot
@@ -96,7 +94,7 @@ class ToAst(Transformer):
         return ast.Let(name, ast.Annot(value, typ), body)
 
     @v_args(inline=True)
-    def binary_op(self, left: ast.Exp, op: str, right: ast.Exp) -> ast.Bop:
+    def binary_op(self, left: str, op: str, right: str) -> ast.Bop:
         return ast.Bop(op, left, right)
 
 

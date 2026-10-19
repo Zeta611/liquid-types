@@ -27,9 +27,9 @@ def interp(exp: Exp, env: Env | None = None) -> Value:
         case Const(n):
             return n
 
-        case Bop(op, e1, e2):
-            v1 = interp(e1, env)
-            v2 = interp(e2, env)
+        case Bop(op, x, y):
+            v1 = interp(Var(x), env)
+            v2 = interp(Var(y), env)
             match op:
                 case "+":
                     if not (isinstance(v1, int) and isinstance(v2, int)):

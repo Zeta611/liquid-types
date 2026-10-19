@@ -31,7 +31,9 @@ class ParserTests(unittest.TestCase):
         };
         let incf = (x) => {
           let tmp = (f) => {
-            f(x) + 1
+            let result = f(x);
+            let one = 1;
+            result + one
           };
           tmp(inc)
         };
