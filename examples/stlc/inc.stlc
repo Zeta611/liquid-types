@@ -1,0 +1,10 @@
+(
+    val inc : x:int => int;
+    let inc = (x) => {
+        let one = 1;
+        x + one
+    };
+
+    let n = 41;
+    inc(n)
+) : int

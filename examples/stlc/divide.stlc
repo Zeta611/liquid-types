@@ -1,0 +1,12 @@
+(
+    val divide : x:int => y:int => int;
+    let divide = (x) => {
+        (y) => {
+            x / y
+        }
+    };
+
+    let six = 6;
+    let two = 2;
+    divide(six)(two)
+) : int
